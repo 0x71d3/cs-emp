@@ -9,7 +9,7 @@ from sklearn.metrics import (
     top_k_accuracy_score
 )
 
-from main import contexts
+from data import contexts
 
 data_dir = sys.argv[1]
 output_dir = sys.argv[2]
