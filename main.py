@@ -16,7 +16,7 @@ from transformers import (
     get_linear_schedule_with_warmup
 )
 
-from data import EmotionDataset
+from data import DailyDialogEmotionDataset
 
 
 class LitRoberta(LightningModule):
@@ -36,7 +36,7 @@ class LitRoberta(LightningModule):
         )
 
         # loader
-        dataset = EmotionDataset(
+        dataset = DailyDialogEmotionDataset(
             data_dir=self.hparams.data_dir,
             split='train',
             tokenizer=self.tokenizer,
@@ -157,7 +157,7 @@ class LitRoberta(LightningModule):
         return self.train_loader
 
     def val_dataloader(self):
-        dataset = EmotionDataset(
+        dataset = DailyDialogEmotionDataset(
             data_dir=self.hparams.data_dir,
             split='valid',
             tokenizer=self.tokenizer,
@@ -170,7 +170,7 @@ class LitRoberta(LightningModule):
         return loader
 
     def test_dataloader(self):
-        dataset = EmotionDataset(
+        dataset = DailyDialogEmotionDataset(
             data_dir=self.hparams.data_dir,
             split='test',
             tokenizer=self.tokenizer,
