@@ -9,7 +9,7 @@ from sklearn.metrics import (
     top_k_accuracy_score
 )
 
-from data import contexts
+from main import contexts, emotions
 
 data_dir = sys.argv[1]
 output_dir = sys.argv[2]
@@ -23,6 +23,10 @@ with open(os.path.join(data_dir, 'test.csv'), newline='') as f:
     reader = csv.DictReader(f, quoting=csv.QUOTE_NONE)
     for row in reader:
         y_true.append(contexts.index(row['context']))
+
+# with open(os.path.join(data_dir, 'test', 'dialogues_emotion_test.txt')) as f:
+#     for line in f:
+#         y_true += list(map(int, line.split()))
 
 with open(os.path.join(output_dir, 'preds.csv'), newline='') as f:
     reader = csv.reader(f)
