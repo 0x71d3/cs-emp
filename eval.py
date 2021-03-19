@@ -19,11 +19,23 @@ y_pred = []
 
 y_score = []
 
+# EmpatheticDialogues
 with open(os.path.join(data_dir, 'test.csv'), newline='') as f:
+    conv_id = ''
+    num_utterances = 0
+
     reader = csv.DictReader(f, quoting=csv.QUOTE_NONE)
     for row in reader:
-        y_true.append(contexts.index(row['context']))
+        if conv_id != row['conv_id']:
+            num_utterances = 0
+        
+        num_utterances += 1
+        if num_utterances % 2 == 1:
+            y_true.append(contexts.index(row['context']))
 
+        conv_id = row['conv_id']
+
+# # DailyDialog
 # with open(os.path.join(data_dir, 'test', 'dialogues_emotion_test.txt')) as f:
 #     for line in f:
 #         y_true += list(map(int, line.split()))
