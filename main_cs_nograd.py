@@ -4,17 +4,20 @@ import os
 import shutil
 
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from pytorch_lightning import LightningModule, Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from transformers import (
-    RobertaConfig,
     RobertaTokenizer,
-    RobertaForSequenceClassification,
+    RobertaModel,
+    BartTokenizer,
+    BartModel,
     AdamW,
     get_linear_schedule_with_warmup
 )
+from transformers.models.bart.modeling_bart import BartClassificationHead
 
 contexts = [
     'afraid', 'angry', 'annoyed', 'anticipating',
@@ -27,16 +30,20 @@ contexts = [
     'sentimental', 'surprised', 'terrified', 'trusting'
 ]
 
-emotions = [
-    'no emotion', 'anger', 'disgust', 'fear',
-    'happiness', 'sadness', 'surprise'
-]
 
-
-class EmotionDataset(Dataset):
-    def __init__(self, data_dir, split, tokenizer, max_length):
+class CometEmotionDataset(Dataset):
+    def __init__(
+        self,
+        data_dir,
+        split,
+        tokenizer,
+        comet_tokenizer,
+        max_length
+    ):
         texts = []
         labels = []
+
+        comet_texts = []
 
         # with open(os.path.join(data_dir, split + '.csv'), newline='') as f:
         #     conv_id = ''
@@ -57,8 +64,7 @@ class EmotionDataset(Dataset):
         #             )
         #             labels.append(contexts.index(row['context']))
 
-        if split == 'valid':
-            split = 'validation'
+        #             comet_texts.append(utterances[-1] + ' oReact [GEN]')
 
         with open(
             os.path.join(data_dir, split, f'dialogues_{split}.txt')
@@ -67,12 +73,14 @@ class EmotionDataset(Dataset):
                 dialogue = list(
                     map(lambda u: u.strip(), line.split('__eou__')[:-1])
                 )
-                for i in range(1, len(dialogue) + 1):
+                for i in range(len(dialogue)):
                     texts.append(
                         tokenizer.cls_token
-                        + (tokenizer.sep_token * 2).join(dialogue[:i])
+                        + (tokenizer.sep_token * 2).join(dialogue[:i+1])
                         + tokenizer.sep_token
                     )
+
+                    comet_texts.append(dialogue[i] + ' oReact [GEN]')
 
         with open(
             os.path.join(data_dir, split, f'dialogues_emotion_{split}.txt'),
@@ -81,6 +89,14 @@ class EmotionDataset(Dataset):
                 labels += list(map(int, line.split()))
 
         assert len(texts) == len(labels)
+
+        # # exclude neutral
+        # texts = [text for text, label in zip(texts, labels) if label > 0]
+        # comet_texts = [
+        #     comet_text for comet_text, label in zip(comet_texts, labels)
+        #     if label > 0
+        # ]
+        # labels = [label - 1 for label in labels if label > 0]
 
         self.inputs = tokenizer(
             texts, 
@@ -92,6 +108,24 @@ class EmotionDataset(Dataset):
         )
         self.labels = torch.tensor(labels)
 
+        self.inputs = tokenizer(
+            texts, 
+            add_special_tokens=False,
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors='pt'
+        )
+        self.labels = torch.tensor(labels)
+
+        self.comet_inputs = comet_tokenizer(
+            comet_texts, 
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors='pt'
+        )
+
     def __len__(self):
         return self.inputs['input_ids'].size(0)
 
@@ -100,70 +134,125 @@ class EmotionDataset(Dataset):
         attention_mask = self.inputs['attention_mask'][index]
         labels = self.labels[index]
 
+        comet_input_ids = self.comet_inputs['input_ids'][index]
+        comet_attention_mask = self.comet_inputs['attention_mask'][index]
+
         return {
             'input_ids': input_ids,
             'attention_mask': attention_mask,
-            'labels': labels
+            'labels': labels,
+
+            'comet_input_ids': comet_input_ids,
+            'comet_attention_mask': comet_attention_mask
         }
 
 
-class LitRoberta(LightningModule):
+class LitRobertaCometNoGrad(LightningModule):
     def __init__(self, params):
         super().__init__()
         self.save_hyperparameters(params)
 
         self.tokenizer = RobertaTokenizer.from_pretrained('roberta-large')
-
-        config = RobertaConfig.from_pretrained(
+        self.model = RobertaModel.from_pretrained(
             'roberta-large',
-            num_labels=self.hparams.num_labels
-        )
-        self.model = RobertaForSequenceClassification.from_pretrained(
-            'roberta-large',
-            config=config
         )
 
+        self.comet_tokenizer = BartTokenizer.from_pretrained(
+            'comet-atomic_2020_BART'
+        )
+        self.comet_model = BartModel.from_pretrained('comet-atomic_2020_BART')
+        # https://pytorch.org/docs/stable/notes/autograd.html
+        for param in self.comet_model.parameters():
+            param.requires_grad = False
+
+        self.classifier = BartClassificationHead(
+            self.model.config.hidden_size + self.comet_model.config.d_model,
+            self.model.config.hidden_size + self.comet_model.config.d_model,
+            self.hparams.num_labels,
+            self.model.config.hidden_dropout_prob
+        )
+    
         # loader
         self.train_loader = self._loader('train')
 
-    def forward(self, input_ids, attention_mask, labels):
-        return self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            labels=labels
+    def forward(
+        self,
+        input_ids,
+        attention_mask,
+        labels,
+        comet_input_ids,
+        comet_attention_mask,
+    ):
+        # roberta
+        outputs = self.model(
+            input_ids,
+            attention_mask=attention_mask
         )
+        sequence_output = outputs[0]
+
+        # comet
+        comet_outputs = self.comet_model(
+            comet_input_ids,
+            attention_mask=comet_attention_mask,
+        )
+        hidden_states = comet_outputs[0]
+
+        eos_mask = comet_input_ids.eq(self.comet_model.config.eos_token_id)
+        if len(torch.unique(eos_mask.sum(1))) > 1:
+            raise ValueError(
+                "All examples must have the same number of <eos> tokens."
+            )
+
+        sentence_representation = hidden_states[eos_mask, :].view(
+            hidden_states.size(0),
+            -1,
+            hidden_states.size(-1)
+        )[:, -1, :]
+
+        # linear
+        classifier_input = torch.cat(
+            (sequence_output[:, 0, :], sentence_representation),
+            dim=-1
+        )
+        logits = self.classifier(classifier_input)
+
+        loss_fct = nn.CrossEntropyLoss()
+        loss = loss_fct(logits.view(-1, self.hparams.num_labels), labels.view(-1))
+
+        return loss, logits
     
     def _step(self, batch):
         input_ids = batch['input_ids']
         attention_mask = batch['attention_mask']
         labels = batch['labels']
 
+        comet_input_ids = batch['comet_input_ids']
+        comet_attention_mask = batch['comet_attention_mask']
+
         return self(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            labels=labels
+            labels=labels,
+
+            comet_input_ids=comet_input_ids,
+            comet_attention_mask=comet_attention_mask
         )
 
     def training_step(self, batch, batch_idx):
-        outputs = self._step(batch)
-        loss = outputs.loss
+        loss, logits = self._step(batch)
         
         self.log('train_loss', loss, on_epoch=True, prog_bar=True)
         return loss
     
     def validation_step(self, batch, batch_idx):
-        outputs = self._step(batch)
-        loss = outputs.loss
+        loss, logits = self._step(batch)
 
         self.log('val_loss', loss, prog_bar=True)
     
     def test_step(self, batch, batch_idx):
-        outputs = self._step(batch)
-        loss = outputs.loss
+        loss, logits = self._step(batch)
 
         self.log('test_loss', loss, prog_bar=True)
-
-        logits = outputs.logits
         return logits.softmax(dim=-1)
 
     def test_epoch_end(self, outputs):
@@ -219,10 +308,11 @@ class LitRoberta(LightningModule):
         return [optimizer], [lr_dict]
 
     def _loader(self, split):
-        dataset = EmotionDataset(
+        dataset = CometEmotionDataset(
             data_dir=self.hparams.data_dir,
             split=split,
             tokenizer=self.tokenizer,
+            comet_tokenizer=self.comet_tokenizer,
             max_length=self.hparams.max_length
         )
         batch_size = (
@@ -230,7 +320,6 @@ class LitRoberta(LightningModule):
             else self.hparams.valid_batch_size
         )
         shuffle = (split == 'train')
-        
         loader = DataLoader(
             dataset=dataset,
             batch_size=batch_size,
@@ -301,7 +390,7 @@ def main():
         max_epochs=args.max_epochs
     )
 
-    model = LitRoberta(args)
+    model = LitRobertaCometNoGrad(args)
 
     trainer.fit(model)
     trainer.test()
