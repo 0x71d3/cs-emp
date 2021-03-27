@@ -30,6 +30,11 @@ contexts = [
     'sentimental', 'surprised', 'terrified', 'trusting'
 ]
 
+emotions = [
+    'no emotion', 'anger', 'disgust', 'fear',
+    'happiness', 'sadness', 'surprise'
+]
+
 
 class CometEmotionDataset(Dataset):
     def __init__(
@@ -45,58 +50,55 @@ class CometEmotionDataset(Dataset):
 
         comet_texts = []
 
-        # with open(os.path.join(data_dir, split + '.csv'), newline='') as f:
-        #     conv_id = ''
-        #     utterances = []
+        if 'empatheticdialogues' in data_dir:
+            with open(os.path.join(data_dir, split + '.csv'), newline='') as f:
+                conv_id = ''
+                utterances = []
 
-        #     for row in csv.DictReader(f, quoting=csv.QUOTE_NONE):
-        #         if conv_id and row['conv_id'] != conv_id:
-        #             utterances = []
-                    
-        #         conv_id = row['conv_id']
-        #         utterances.append(row['utterance'].replace('_comma_', ','))
+                for row in csv.DictReader(f, quoting=csv.QUOTE_NONE):
+                    if conv_id and row['conv_id'] != conv_id:
+                        utterances = []
+                        
+                    conv_id = row['conv_id']
+                    utterances.append(row['utterance'].replace('_comma_', ','))
 
-        #         if len(utterances) % 2 == 1:
-        #             texts.append(
-        #                 tokenizer.cls_token
-        #                 + (tokenizer.sep_token * 2).join(utterances)
-        #                 + tokenizer.sep_token
-        #             )
-        #             labels.append(contexts.index(row['context']))
+                    if len(utterances) % 2 == 1:
+                        texts.append(
+                            tokenizer.cls_token
+                            + (tokenizer.sep_token * 2).join(utterances)
+                            + tokenizer.sep_token
+                        )
+                        labels.append(contexts.index(row['context']))
 
-        #             comet_texts.append(utterances[-1] + ' oReact [GEN]')
+                        comet_texts.append(utterances[-1] + ' oReact [GEN]')
 
-        with open(
-            os.path.join(data_dir, split, f'dialogues_{split}.txt')
-        ) as f:
-            for line in f:
-                dialogue = list(
-                    map(lambda u: u.strip(), line.split('__eou__')[:-1])
-                )
-                for i in range(len(dialogue)):
-                    texts.append(
-                        tokenizer.cls_token
-                        + (tokenizer.sep_token * 2).join(dialogue[:i+1])
-                        + tokenizer.sep_token
+        else:
+            if split == 'valid':
+                split = 'validation'
+
+            with open(
+                os.path.join(data_dir, split, f'dialogues_{split}.txt')
+            ) as f:
+                for line in f:
+                    dialogue = list(
+                        map(lambda u: u.strip(), line.split('__eou__')[:-1])
                     )
+                    for i in range(len(dialogue)):
+                        texts.append(
+                            tokenizer.cls_token
+                            + (tokenizer.sep_token * 2).join(dialogue[:i+1])
+                            + tokenizer.sep_token
+                        )
 
-                    comet_texts.append(dialogue[i] + ' oReact [GEN]')
+                        comet_texts.append(dialogue[i] + ' xReact [GEN]')
 
-        with open(
-            os.path.join(data_dir, split, f'dialogues_emotion_{split}.txt'),
-        ) as f:
-            for line in f:
-                labels += list(map(int, line.split()))
+            with open(
+                os.path.join(data_dir, split, f'dialogues_emotion_{split}.txt'),
+            ) as f:
+                for line in f:
+                    labels += list(map(int, line.split()))
 
-        assert len(texts) == len(labels)
-
-        # # exclude neutral
-        # texts = [text for text, label in zip(texts, labels) if label > 0]
-        # comet_texts = [
-        #     comet_text for comet_text, label in zip(comet_texts, labels)
-        #     if label > 0
-        # ]
-        # labels = [label - 1 for label in labels if label > 0]
+            assert len(texts) == len(labels)
 
         self.inputs = tokenizer(
             texts, 
@@ -166,8 +168,8 @@ class LitRobertaCometNoGrad(LightningModule):
             param.requires_grad = False
 
         self.classifier = BartClassificationHead(
-            self.model.config.hidden_size + self.comet_model.config.d_model,
-            self.model.config.hidden_size + self.comet_model.config.d_model,
+            self.model.config.hidden_size + self.comet_model.config.d_model * 2,
+            self.model.config.hidden_size + self.comet_model.config.d_model * 2,
             self.hparams.num_labels,
             self.model.config.hidden_dropout_prob
         )
@@ -191,6 +193,7 @@ class LitRobertaCometNoGrad(LightningModule):
         sequence_output = outputs[0]
 
         # comet
+        # xReact
         comet_outputs = self.comet_model(
             comet_input_ids,
             attention_mask=comet_attention_mask,
@@ -209,9 +212,35 @@ class LitRobertaCometNoGrad(LightningModule):
             hidden_states.size(-1)
         )[:, -1, :]
 
+        # oReact
+        x_token = 'xReact'
+        o_token = 'oReact'
+
+        x_id = self.comet_tokenizer.convert_tokens_to_ids(x_token)
+        o_id = self.comet_tokenizer.convert_tokens_to_ids(o_token)
+
+        comet_o_input_ids = comet_input_ids.clone()
+        comet_o_input_ids[comet_o_input_ids == x_id] = o_id
+
+        comet_o_outputs = self.comet_model(
+            comet_o_input_ids,
+            attention_mask=comet_attention_mask,
+        )
+        o_hidden_states = comet_o_outputs[0]
+
+        o_sentence_representation = o_hidden_states[eos_mask, :].view(
+            o_hidden_states.size(0),
+            -1,
+            o_hidden_states.size(-1)
+        )[:, -1, :]
+
         # linear
         classifier_input = torch.cat(
-            (sequence_output[:, 0, :], sentence_representation),
+            (
+                sequence_output[:, 0, :],
+                sentence_representation,
+                o_sentence_representation
+            ),
             dim=-1
         )
         logits = self.classifier(classifier_input)

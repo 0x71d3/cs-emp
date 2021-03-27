@@ -38,49 +38,51 @@ class EmotionDataset(Dataset):
         texts = []
         labels = []
 
-        # with open(os.path.join(data_dir, split + '.csv'), newline='') as f:
-        #     conv_id = ''
-        #     utterances = []
+        if 'empatheticdialogues' in data_dir:
+            with open(os.path.join(data_dir, split + '.csv'), newline='') as f:
+                conv_id = ''
+                utterances = []
 
-        #     for row in csv.DictReader(f, quoting=csv.QUOTE_NONE):
-        #         if conv_id and row['conv_id'] != conv_id:
-        #             utterances = []
-                    
-        #         conv_id = row['conv_id']
-        #         utterances.append(row['utterance'].replace('_comma_', ','))
+                for row in csv.DictReader(f, quoting=csv.QUOTE_NONE):
+                    if conv_id and row['conv_id'] != conv_id:
+                        utterances = []
+                        
+                    conv_id = row['conv_id']
+                    utterances.append(row['utterance'].replace('_comma_', ','))
 
-        #         if len(utterances) % 2 == 1:
-        #             texts.append(
-        #                 tokenizer.cls_token
-        #                 + (tokenizer.sep_token * 2).join(utterances)
-        #                 + tokenizer.sep_token
-        #             )
-        #             labels.append(contexts.index(row['context']))
+                    if len(utterances) % 2 == 1:
+                        texts.append(
+                            tokenizer.cls_token
+                            + (tokenizer.sep_token * 2).join(utterances)
+                            + tokenizer.sep_token
+                        )
+                        labels.append(contexts.index(row['context']))
 
-        if split == 'valid':
-            split = 'validation'
+        else:
+            if split == 'valid':
+                split = 'validation'
 
-        with open(
-            os.path.join(data_dir, split, f'dialogues_{split}.txt')
-        ) as f:
-            for line in f:
-                dialogue = list(
-                    map(lambda u: u.strip(), line.split('__eou__')[:-1])
-                )
-                for i in range(1, len(dialogue) + 1):
-                    texts.append(
-                        tokenizer.cls_token
-                        + (tokenizer.sep_token * 2).join(dialogue[:i])
-                        + tokenizer.sep_token
+            with open(
+                os.path.join(data_dir, split, f'dialogues_{split}.txt')
+            ) as f:
+                for line in f:
+                    dialogue = list(
+                        map(lambda u: u.strip(), line.split('__eou__')[:-1])
                     )
+                    for i in range(1, len(dialogue) + 1):
+                        texts.append(
+                            tokenizer.cls_token
+                            + (tokenizer.sep_token * 2).join(dialogue[:i])
+                            + tokenizer.sep_token
+                        )
 
-        with open(
-            os.path.join(data_dir, split, f'dialogues_emotion_{split}.txt'),
-        ) as f:
-            for line in f:
-                labels += list(map(int, line.split()))
+            with open(
+                os.path.join(data_dir, split, f'dialogues_emotion_{split}.txt'),
+            ) as f:
+                for line in f:
+                    labels += list(map(int, line.split()))
 
-        assert len(texts) == len(labels)
+            assert len(texts) == len(labels)
 
         self.inputs = tokenizer(
             texts, 
