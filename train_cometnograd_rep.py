@@ -7,7 +7,7 @@ from transformers import (
     EarlyStoppingCallback,
 )
 
-from data import read_comet_ed_split, CometEmotionDataset
+from data import read_comet_ed_rep_split, CometEmotionDataset
 from model import RobertaCometNoGrad
 from train import compute_metrics
 
@@ -23,9 +23,9 @@ class CometTrainer(Trainer):
 
 
 def main():
-    train_texts, train_labels, comet_train_texts = read_comet_ed_split('empatheticdialogues/train.csv')
-    val_texts, val_labels, comet_val_texts = read_comet_ed_split('empatheticdialogues/valid.csv')
-    test_texts, test_labels, comet_test_texts = read_comet_ed_split('empatheticdialogues/test.csv')
+    train_texts, train_labels, comet_train_texts = read_comet_ed_rep_split('empatheticdialogues/train.csv')
+    val_texts, val_labels, comet_val_texts = read_comet_ed_rep_split('empatheticdialogues/valid.csv')
+    test_texts, test_labels, comet_test_texts = read_comet_ed_rep_split('empatheticdialogues/test.csv')
 
     tokenizer = RobertaTokenizer.from_pretrained('roberta-large')
 
@@ -52,7 +52,7 @@ def main():
     model = RobertaCometNoGrad()
 
     training_args = TrainingArguments(
-        output_dir='./results_cometnograd',
+        output_dir='./results_cometnograd_rep',
         num_train_epochs=10,
         per_device_train_batch_size=2,
         per_device_eval_batch_size=2,
@@ -64,7 +64,7 @@ def main():
         adam_epsilon=1e-6,
         max_grad_norm=0.0,
         warmup_steps=823,
-        logging_dir='./logs_cometnograd',
+        logging_dir='./logs_cometnograd_rep',
 
         evaluation_strategy='epoch',
         load_best_model_at_end=True,
@@ -87,7 +87,7 @@ def main():
     predict_output = trainer.predict(test_dataset)
     print(predict_output.metrics)
 
-    trainer.save_model('./robertacometnograd_ed')
+    trainer.save_model('./robertacometnograd_ed_rep')
 
 if __name__ == '__main__':
     main()

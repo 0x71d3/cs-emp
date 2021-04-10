@@ -1,6 +1,7 @@
 import csv
 
 import torch
+from nltk.tokenize.treebank import TreebankWordTokenizer, TreebankWordDetokenizer
 
 contexts = [
     'afraid', 'angry', 'annoyed', 'anticipating',
@@ -17,6 +18,16 @@ emotions = [
     'no emotion', 'anger', 'disgust', 'fear',
     'happiness', 'sadness', 'surprise'
 ]
+
+rep_map = {
+    'i': 'PersonX',
+    'me': 'PersonX',
+    'my': 'PersonX\'s',
+    'mine': 'PersonX\'s',
+    'you': 'PersonY',
+    'your': 'PersonY\'s',
+    'yours': 'PersonY\'s',
+}
 
 
 def read_ed_split(split_file):
@@ -54,10 +65,39 @@ def read_comet_ed_split(split_file):
             if len(utterances) % 2 == 1:
                 texts.append('<s>' + '</s></s>'.join(utterances) + '</s>')
                 labels.append(contexts.index(row['context']))
-                comet_texts.append(utterances[-1])
+                comet_texts.append(utterances[-1] + ' xReact [GEN]')
 
     return texts, labels, comet_texts
 
+
+def read_comet_ed_rep_split(split_file):
+    t = TreebankWordTokenizer()
+    d = TreebankWordDetokenizer()
+    texts = []
+    labels = []
+    comet_texts = []
+    with open(split_file, newline='') as f:
+        conv_id = ''
+        utterances = []
+        for row in csv.DictReader(f, quoting=csv.QUOTE_NONE):
+            if conv_id and row['conv_id'] != conv_id:
+                utterances = []
+                
+            conv_id = row['conv_id']
+            utterances.append(row['utterance'].replace('_comma_', ','))
+            if len(utterances) % 2 == 1:
+                texts.append('<s>' + '</s></s>'.join(utterances) + '</s>')
+                labels.append(contexts.index(row['context']))
+
+                toks = t.tokenize(utterances[-1])
+                for i in range(len(toks)):
+                    lower_tok = toks[i].lower()
+                    if lower_tok in rep_map:
+                        toks[i] = rep_map[lower_tok]
+                        
+                comet_texts.append(d.detokenize(toks) + ' xReact [GEN]')
+
+    return texts, labels, comet_texts
 
 
 def read_dd_split(text_file, label_file):

@@ -1,6 +1,8 @@
 __pycache__/
 
 *.sh
-lightning_logs/
 
-roberta_*/
+logs*/
+results*/
+
+roberta*/

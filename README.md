@@ -1,35 +1,23 @@
 # Dialogue Empathy Recognition with Commonsense
 
-roberta
+## Datasets
 
-https://huggingface.co/transformers/v4.1.1/model_doc/roberta.html
-
-https://github.com/pytorch/fairseq/blob/master/examples/roberta/README.custom_classification.md
-
-pytorch lightning
-
-https://pytorch-lightning.readthedocs.io/en/1.1.2/lightning_module.html
-
-https://pytorch-lightning.readthedocs.io/en/1.1.2/trainer.html
-
-empatheticdialogues
+### EmpatheticDialogues
 
 https://github.com/facebookresearch/EmpatheticDialogues
 
-dailydialog
+### DailyDialog
 
 http://yanran.li/dailydialog
 
-atomic
+## Model
 
-https://homes.cs.washington.edu/~msap/atomic/
+### RoBERTa
 
-https://allenai.org/data/atomic
+https://huggingface.co/transformers/model_doc/roberta.html
 
-https://allenai.org/data/atomic-2020
+https://github.com/pytorch/fairseq/blob/master/examples/roberta/README.custom_classification.md
 
-comet
-
-https://github.com/atcbosselut/comet-commonsense
+### COMET
 
 https://github.com/allenai/comet-atomic-2020
