@@ -65,7 +65,7 @@ def read_comet_ed_split(split_file):
             if len(utterances) % 2 == 1:
                 texts.append('<s>' + '</s></s>'.join(utterances) + '</s>')
                 labels.append(contexts.index(row['context']))
-                comet_texts.append(utterances[-1] + ' xReact [GEN]')
+                comet_texts.append(utterances[-1] + ' xIntent [GEN]')
 
     return texts, labels, comet_texts
 
@@ -88,14 +88,13 @@ def read_comet_ed_rep_split(split_file):
             if len(utterances) % 2 == 1:
                 texts.append('<s>' + '</s></s>'.join(utterances) + '</s>')
                 labels.append(contexts.index(row['context']))
-
                 toks = t.tokenize(utterances[-1])
                 for i in range(len(toks)):
                     lower_tok = toks[i].lower()
                     if lower_tok in rep_map:
                         toks[i] = rep_map[lower_tok]
                         
-                comet_texts.append(d.detokenize(toks) + ' xReact [GEN]')
+                comet_texts.append(d.detokenize(toks) + ' xIntent [GEN]')
 
     return texts, labels, comet_texts
 
@@ -115,6 +114,52 @@ def read_dd_split(text_file, label_file):
 
     assert len(texts) == len(labels)
     return texts, labels
+
+
+def read_comet_dd_split(text_file, label_file):
+    texts = []
+    labels = []
+    comet_texts = []
+    with open(text_file) as f:
+        for line in f:
+            dialogue = list(map(lambda u: u.strip(), line.split('__eou__')[:-1]))
+            for i in range(1, len(dialogue) + 1):
+                texts.append('<s>' + '</s></s>'.join(dialogue[:i]) + '</s>')
+                comet_texts.append(dialogue[i-1] + ' xIntent [GEN]')
+
+    with open(label_file) as f:
+        for line in f:
+            labels += list(map(int, line.split()))
+
+    assert len(texts) == len(labels)
+    return texts, labels, comet_texts
+
+
+def read_comet_dd_rep_split(text_file, label_file):
+    t = TreebankWordTokenizer()
+    d = TreebankWordDetokenizer()
+    texts = []
+    labels = []
+    comet_texts = []
+    with open(text_file) as f:
+        for line in f:
+            dialogue = list(map(lambda u: u.strip(), line.split('__eou__')[:-1]))
+            for i in range(1, len(dialogue) + 1):
+                texts.append('<s>' + '</s></s>'.join(dialogue[:i]) + '</s>')
+                toks = t.tokenize(dialogue[i-1])
+                for i in range(len(toks)):
+                    lower_tok = toks[i].lower()
+                    if lower_tok in rep_map:
+                        toks[i] = rep_map[lower_tok]
+                        
+                comet_texts.append(d.detokenize(toks) + ' xIntent [GEN]')
+
+    with open(label_file) as f:
+        for line in f:
+            labels += list(map(int, line.split()))
+
+    assert len(texts) == len(labels)
+    return texts, labels, comet_texts
 
 
 class EmotionDataset(torch.utils.data.Dataset):

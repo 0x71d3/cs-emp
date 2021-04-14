@@ -10,16 +10,7 @@ from transformers import (
 from data import read_comet_ed_rep_split, CometEmotionDataset
 from model import RobertaCometNoGrad
 from train import compute_metrics
-
-
-class CometTrainer(Trainer):
-    def compute_loss(self, model, inputs, return_outputs=False):
-        labels = inputs.pop('labels')
-        outputs = model(**inputs)
-        logits = outputs.logits
-        loss_fct = nn.CrossEntropyLoss()
-        loss = loss_fct(logits.view(-1, model.num_labels), labels.view(-1))
-        return (loss, outputs) if return_outputs else loss
+from train_cometnograd import CometTrainer
 
 
 def main():
@@ -49,7 +40,7 @@ def main():
     del train_labels, val_labels, test_labels
     del comet_train_encodings, comet_val_encodings, comet_test_encodings
 
-    model = RobertaCometNoGrad()
+    model = RobertaCometNoGrad(32)
 
     training_args = TrainingArguments(
         output_dir='./results_cometnograd_rep',
@@ -88,6 +79,7 @@ def main():
     print(predict_output.metrics)
 
     trainer.save_model('./robertacometnograd_ed_rep')
+
 
 if __name__ == '__main__':
     main()

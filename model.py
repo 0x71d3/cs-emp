@@ -6,23 +6,18 @@ from transformers.models.bart.modeling_bart import BartClassificationHead
 from transformers.modeling_outputs import SequenceClassifierOutput
 
 
-class RobertaCometNoGrad(nn.Module):
-    def __init__(self):
+class RobertaComet(nn.Module):
+    def __init__(self, num_labels):
         super().__init__()
-        self.num_labels = 32
+        self.num_labels = num_labels
 
-        self.roberta = RobertaModel.from_pretrained('roberta-large', num_labels=32)
-
+        self.roberta = RobertaModel.from_pretrained('roberta-large', num_labels=num_labels)
         self.comet = BartModel.from_pretrained('comet-atomic_2020_BART')
-        for param in self.comet.base_model.parameters():
-            param.requires_grad = False
 
         self.classification_head = BartClassificationHead(
             self.roberta.config.hidden_size + self.comet.config.d_model,
             self.roberta.config.hidden_size + self.comet.config.d_model,
-            # self.roberta.config.hidden_size + self.comet.config.d_model * 2,
-            # self.roberta.config.hidden_size + self.comet.config.d_model * 2,
-            self.roberta.config.num_labels,
+            num_labels,
             self.roberta.config.hidden_dropout_prob,
         )
 
@@ -37,13 +32,14 @@ class RobertaCometNoGrad(nn.Module):
     ):
         return_dict = return_dict if return_dict is not None else self.roberta.config.use_return_dict
 
+        # RoBERTa
         outputs = self.roberta(
             input_ids,
             attention_mask=attention_mask,
         )
         sequence_output = outputs[0]
 
-        # xReact
+        # COMET
         comet_outputs = self.comet(
             comet_input_ids,
             attention_mask=comet_attention_mask,
@@ -56,26 +52,10 @@ class RobertaCometNoGrad(nn.Module):
             raise ValueError('All examples must have the same number of <eos> tokens.')
         comet_sentence_representation = comet_hidden_states[comet_eos_mask, :].view(comet_hidden_states.size(0), -1, comet_hidden_states.size(-1))[:, -1, :]
 
-        # # oReact
-        # x_id = self.comet_tokenizer.convert_tokens_to_ids('xReact')
-        # o_id = self.comet_tokenizer.convert_tokens_to_ids('oReact')
-
-        # comet_o_input_ids = comet_input_ids.clone()
-        # comet_o_input_ids[comet_o_input_ids == x_id] = o_id
-
-        # comet_o_outputs = self.comet(
-        #     comet_o_input_ids,
-        #     attention_mask=comet_attention_mask,
-        # )
-        # comet_o_hidden_states = comet_o_outputs[0]
-
-        # comet_o_sentence_representation = comet_o_hidden_states[comet_eos_mask, :].view(comet_o_hidden_states.size(0), -1, comet_o_hidden_states.size(-1))[:, -1, :]
-
         classification_head_input = torch.cat(
             (
                 sequence_output[:, 0, :],
                 comet_sentence_representation,
-                # comet_o_sentence_representation,
             ),
             dim=-1,
         )
@@ -96,3 +76,11 @@ class RobertaCometNoGrad(nn.Module):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
+
+
+class RobertaCometNoGrad(RobertaComet):
+    def __init__(self, num_labels):
+        super().__init__(num_labels)
+
+        for param in self.comet.base_model.parameters():
+            param.requires_grad = False
