@@ -3,11 +3,12 @@ __pycache__/
 empatheticdialogues/
 ijcnlp_dailydialog/
 
-comet-atomic_2020_BART*/
+comet-atomic_2020_BART/
 
-*.sh*
+*.sh
+*.sh.o*
 
-logs*/
-results*/
+logs/
+results/
 
-roberta*/
+models/

@@ -155,9 +155,9 @@ def main(args):
     training_args = TrainingArguments(
         output_dir=f'./results/{model_name}',
         num_train_epochs=10,
-        per_device_train_batch_size=4,  # 8 by default
-        per_device_eval_batch_size=4,   # 8 by default
-        gradient_accumulation_steps=8,  # 4 by default
+        per_device_train_batch_size=args.per_device_batch_size,
+        per_device_eval_batch_size=args.per_device_batch_size,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=1e-5,
         weight_decay=0.1,
         adam_beta1=0.9,
@@ -201,6 +201,9 @@ if __name__ == '__main__':
     parser.add_argument('--comet', action='store_true')
     parser.add_argument('--comet_no_grad', action='store_true')
     parser.add_argument('--comet_name_or_path', default='comet-atomic_2020_BART')
+
+    parser.add_argument('--per_device_batch_size', default=8, type=int)
+    parser.add_argument('--gradient_accumulation_steps', default=4, type=int)
 
     args = parser.parse_args()
     main(args)
