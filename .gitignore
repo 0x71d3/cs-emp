@@ -1,6 +1,11 @@
 __pycache__/
 
-*.sh
+empatheticdialogues/
+ijcnlp_dailydialog/
+
+comet-atomic_2020_BART*/
+
+*.sh*
 
 logs*/
 results*/
