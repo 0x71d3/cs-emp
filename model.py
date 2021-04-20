@@ -7,12 +7,17 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 
 
 class RobertaComet(nn.Module):
-    def __init__(self, num_labels):
+    def __init__(
+        self,
+        num_labels,
+        roberta_name_or_path='roberta-large',
+        comet_name_or_path='comet-atomic_2020_BART',
+    ):
         super().__init__()
         self.num_labels = num_labels
 
-        self.roberta = RobertaModel.from_pretrained('roberta-large', num_labels=num_labels)
-        self.comet = BartModel.from_pretrained('comet-atomic_2020_BART')
+        self.roberta = RobertaModel.from_pretrained(roberta_name_or_path, num_labels=num_labels)
+        self.comet = BartModel.from_pretrained(comet_name_or_path)
 
         self.classification_head = BartClassificationHead(
             self.roberta.config.hidden_size + self.comet.config.d_model,
@@ -79,8 +84,17 @@ class RobertaComet(nn.Module):
 
 
 class RobertaCometNoGrad(RobertaComet):
-    def __init__(self, num_labels):
-        super().__init__(num_labels)
+    def __init__(
+        self,
+        num_labels,
+        roberta_name_or_path='roberta-large',
+        comet_name_or_path='comet-atomic_2020_BART',
+    ):
+        super().__init__(
+            num_labels,
+            roberta_name_or_path,
+            comet_name_or_path,
+        )
 
         for param in self.comet.base_model.parameters():
             param.requires_grad = False

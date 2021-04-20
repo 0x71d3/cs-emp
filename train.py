@@ -100,7 +100,7 @@ def main(args):
     test_encodings = tokenizer(test_texts, truncation=True, padding=True, add_special_tokens=False)
 
     if args.comet:
-        comet_tokenizer = BartTokenizer.from_pretrained('comet-atomic_2020_BART')
+        comet_tokenizer = BartTokenizer.from_pretrained(args.comet_name_or_path)
 
         comet_train_encodings = comet_tokenizer(comet_train_texts, truncation=True, padding=True)
         comet_val_encodings = comet_tokenizer(comet_val_texts, truncation=True, padding=True)
@@ -124,14 +124,25 @@ def main(args):
     del train_labels, val_labels, test_labels
 
     if not args.comet:
-        model = RobertaForSequenceClassification.from_pretrained(args.roberta_name_or_path, num_labels=num_labels)
+        model = RobertaForSequenceClassification.from_pretrained(
+            args.roberta_name_or_path,
+            num_labels=num_labels,
+        )
     
     else:
         if not args.comet_no_grad:
-            model = RobertaComet(num_labels)
+            model = RobertaComet(
+                num_labels,
+                args.roberta_name_or_path,
+                args.comet_name_or_path,
+            )
         
         else:
-            model = RobertaCometNoGrad(num_labels)
+            model = RobertaCometNoGrad(
+                num_labels,
+                args.roberta_name_or_path,
+                args.comet_name_or_path,
+            )
 
     model_name = 'rb-'
     if 'base' in args.roberta_name_or_path:

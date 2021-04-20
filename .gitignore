@@ -5,6 +5,8 @@ ijcnlp_dailydialog/
 
 comet-atomic_2020_BART/
 
+comet-atomic_2020_BART_base/
+
 *.sh
 *.sh.o*
 
